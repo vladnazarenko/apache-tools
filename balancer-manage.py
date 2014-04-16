@@ -68,7 +68,7 @@ url="http://%s:%s/balancer-manager" % (host, port)
 # functions
 
 def balancer_status():
-    req = Request(url, None, headers)
+    req = Request(url, None)
     f = urlopen(req)
     #print f.read()
 
@@ -114,7 +114,7 @@ def balancer_manage(sAction, worker):
         return 1
 
     #Read informations
-    req = Request(url, None, headers)
+    req = Request(url, None)
     f = urlopen(req)
 
     #Find balancer and nonce
@@ -125,7 +125,7 @@ def balancer_manage(sAction, worker):
     #Generate URL
     action = (0,1)[sAction == 'disable']
     params = urlencode({'b': balancer, 'w': worker, 'status_D': action, 'nonce': nonce})
-    req = Request(url+"?%s" % params, None, headers)
+    req = Request(url+"?%s" % params, None)
     f = urlopen(req)
     print "Action\n    Worker %s [%s]\n\nStatus" % (worker,sAction)
     balancer_status()
