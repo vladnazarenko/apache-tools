@@ -29,9 +29,14 @@
 import argparse
 import re
 import HTMLParser
-from urllib import urlencode
-from urllib2 import Request, urlopen
+import sys
 
+from urllib  import urlencode
+from urllib2 import Request
+from urllib2 import urlopen
+from urlparse import urlparse
+
+#############################################################################
 # Get args
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("-H", "--host", help="Host connect to", type=str)
@@ -94,11 +99,20 @@ def balancer_status():
     template = "    {Worker:40} | {Status:10} | {Elected:10} | {To:10} | {From:10}"
 
     print template.format(Worker="Worker",Status="Status",Elected="Elected", To="To", From="From")
-    for v in p.datas[2:]:
-        print template.format(Worker=v[0],Status=v[3].split(" ")[1],Elected=v[4], To=v[5], From=v[6])
+    for v in p.datas:
+        r = urlparse(v[0])
+        if r.scheme:
+            # the URL is parsable
+            print template.format(Worker=v[0],Status=v[3],Elected=v[4], To=v[5], From=v[6])
+            template.format(Worker=v[0],Status=v[3],Elected=v[4], To=v[5], From=v[6])
 
 
-def balancer_manage(action, worker):
+def balancer_manage(sAction, worker):
+
+    if sAction not in ['enable', 'disable']:
+        print "Unknown action: %s" %(sAction)
+        return 1
+
     #Read informations
     req = Request(url, None, headers)
     f = urlopen(req)
@@ -109,11 +123,11 @@ def balancer_manage(action, worker):
         balancer = result.group(1)
         nonce = result.group(2)
     #Generate URL
-    action = (0,1)[action == 'disable']
+    action = (0,1)[sAction == 'disable']
     params = urlencode({'b': balancer, 'w': worker, 'status_D': action, 'nonce': nonce})
     req = Request(url+"?%s" % params, None, headers)
     f = urlopen(req)
-    print "Action\n    Worker %s [%s]\n\nStatus" % (worker,action)
+    print "Action\n    Worker %s [%s]\n\nStatus" % (worker,sAction)
     balancer_status()
 
 
@@ -123,5 +137,6 @@ if __name__ == "__main__":
     if ARGS.list :
         balancer_status()
     elif ARGS.action and ARGS.worker:
-        balancer_manage(ARGS.action,ARGS.worker)
+        r = balancer_manage(ARGS.action,ARGS.worker)
+        sys.exit(r)
     else : PARSER.print_help()
