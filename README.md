@@ -5,7 +5,7 @@ Scripts Apache
 
 #balancer-manager.py
 
- Allow you to manage Worker/BalancerMember defined in your apache2 mod_proxy conf : 
+ Allow you to manage Worker/BalancerMember defined in your apache2 mod_proxy conf :
 
 ```bash
     <Proxy balancer://tomcatservers>
@@ -27,18 +27,10 @@ Like :
  </Location>
 ```
 
-Fix if necessary :
-```bash
-#vhostname
-headers = {"Host": '127.0.0.1' }
-#ip to reach apache
-url="http://127.0.0.1/balancer-manager"
-```
-
-
 ##Dependency
 ```bash
    apt-get install python-argparse
+   yum     install python-argparse
 ```
 
 ##Example of use:
