@@ -34,6 +34,8 @@ from urllib2 import Request, urlopen
 
 # Get args
 PARSER = argparse.ArgumentParser()
+PARSER.add_argument("-H", "--host", help="Host connect to", type=str)
+PARSER.add_argument("-p", "--port", help="Port connect to", type=str)
 PARSER.add_argument("-l", "--list",
             help="List Worker member and status", action='store_true')
 PARSER.add_argument("-a", "--action",
@@ -42,11 +44,23 @@ PARSER.add_argument("-w", "--worker",
             help="Worker name : example ajp://127.0.0.1:8001", type=str)
 ARGS = PARSER.parse_args()
 
-#Fix if necessary
-#vhostname
-headers = {"Host": '127.0.0.1' }
-#ip to reach apache
-url="http://127.0.0.1/balancer-manager"
+#############################################################################
+# default values
+
+host='localhost'
+port = 80
+
+if ARGS.host:
+    host = ARGS.host
+    if ARGS.port: port = ARGS.port
+
+if ARGS.port:
+    port = ARGS.port
+
+url="http://%s:%s/balancer-manager" % (host, port)
+
+#############################################################################
+# functions
 
 def balancer_status():
     req = Request(url, None, headers)
