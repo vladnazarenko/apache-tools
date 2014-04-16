@@ -97,7 +97,6 @@ def balancer_status():
     p.feed(f.read())
 
     template = "    {Worker:40} | {Status:10} | {Elected:10} | {To:10} | {From:10}"
-
     print template.format(Worker="Worker",Status="Status",Elected="Elected", To="To", From="From")
     for v in p.datas:
         r = urlparse(v[0])
@@ -131,6 +130,7 @@ def balancer_manage(sAction, worker):
     balancer_status()
 
 
+#############################################################################
 
 if __name__ == "__main__":
     #if ARGS.list is not None:
