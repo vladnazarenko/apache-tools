@@ -96,14 +96,19 @@ def balancer_status():
     p = TableParser()
     p.feed(f.read())
 
-    template = "    {Worker:40} | {Status:10} | {Elected:10} | {To:10} | {From:10}"
-    print template.format(Worker="Worker",Status="Status",Elected="Elected", To="To", From="From")
+    state = []
     for v in p.datas:
         r = urlparse(v[0])
         if r.scheme:
             # the URL is parsable
-            print template.format(Worker=v[0],Status=v[3],Elected=v[4], To=v[5], From=v[6])
-            template.format(Worker=v[0],Status=v[3],Elected=v[4], To=v[5], From=v[6])
+            state.append( [ v[0], ('enabled','disabled')[ v[4].find('Dis') !=  -1 ] ])
+
+
+    template = "    {Worker:40} | {Status:10}"
+    print template.format(Worker="Worker",Status="Status")
+    for v in state:
+        print template.format(Worker=v[0],Status=v[1])
+        template.format(Worker=v[0],Status=v[1])
 
 
 def balancer_manage(sAction, worker):
