@@ -94,7 +94,7 @@ def balancer_status():
 
         def handle_endtag(self, tag):
 
-            # if now text data was enclosed by the tag, handle_data function
+            # if no text data was enclosed by the tag, handle_data function
             # is not called, we have to handle it with a hook
             if self.in_td and self._wData == None:
                 self._tds.append('')

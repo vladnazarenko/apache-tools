@@ -62,23 +62,23 @@ Like :
         worker.template.recovery_options=3
         worker.template.distance=0
 
-        worker.appsrvA0.reference=worker.template
-        worker.appsrvA0.host=appa01.e.ol.dvag.com
-        worker.appsrvA0.port=23009
-        worker.appsrvA1.reference=worker.template
-        worker.appsrvA1.host=appa01.e.ol.dvag.com
-        worker.appsrvA1.port=23109
-        worker.appsrvB0.reference=worker.template
-        worker.appsrvB0.host=appa02.e.ol.dvag.com
-        worker.appsrvB0.port=23009
-        worker.appsrvB1.reference=worker.template
-        worker.appsrvB1.host=appa02.e.ol.dvag.com
-        worker.appsrvB1.port=23109
+        worker.appsrv00.reference=worker.template
+        worker.appsrv00.host=app01.example.com
+        worker.appsrv00.port=8080
+        worker.appsrv01.reference=worker.template
+        worker.appsrv01.host=app01.example.com
+        worker.appsrv01.port=9080
+        worker.appsrv10.reference=worker.template
+        worker.appsrv10.host=app02.example.com
+        worker.appsrv10.port=8080
+        worker.appsrv11.reference=worker.template
+        worker.appsrv11.host=app02.example.com
+        worker.appsrv11.port=9080
 
         worker.appsrv.type=lb
         worker.appsrv.method=B
         worker.appsrv.recover_time=30
-        worker.appsrv.balance_workers=appsrvA0 appsrvA1 appsrvB0 appsrvB1
+        worker.appsrv.balance_workers=appsrv00 appsrv01 appsrv10 appsrv11
 
         worker.list=status appsrv
 ```
