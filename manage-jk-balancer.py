@@ -68,11 +68,11 @@ import argparse
 import re
 import HTMLParser
 import sys
+import urlparse
 
 from urllib  import urlencode
 from urllib2 import Request
 from urllib2 import urlopen
-from urlparse import urlparse
 
 #############################################################################
 # Get args
@@ -110,111 +110,199 @@ def getWorkersList():
     reqUrl = "%s?cmd=list" % (url)
     req = Request(reqUrl, None)
     f = urlopen(req)
-    #print f.read()
 
-    class TableParser(HTMLParser.HTMLParser):
+    class LBParser(HTMLParser.HTMLParser):
         def __init__(self):
-            self.datas=[]
-            self._tds=[]
+            self.workers           = {}
+            self._wData            = None
+            self.datas             = []
+            self._tds              = []
+            self._balancer         = ''
+            self.in_td             = False
+            self.in_th             = False
+            self.in_h3             = False
+
+            self.in_bm_declaration = False
+            self.in_bm_status      = False
+
             HTMLParser.HTMLParser.__init__(self)
-            self.in_td = False
 
         def handle_starttag(self, tag, attrs):
-            if tag == 'td' or tag == 'th' or tag == 'h3':
-            #if tag == 'h4':
+            if tag == 'td':
                 self.in_td = True
+            elif tag == 'th':
+                self.in_th = True
+            elif tag == 'h3':
+                self.in_h3 = True
+            elif self.in_h3 and not self.in_td and tag == 'a':
+                b = self.get_balancer_name(attrs)
+                if b:
+                    self._balancer = b
 
         def handle_data(self, data):
             if self.in_td:
                 self._tds.append(data)
+                self._wData = data
+            elif self.in_th and data == 'Address:Port':
+                self.in_bm_declaration = True
+            elif self.in_th and data == 'Route':
+                self.in_bm_status = True
 
         def handle_endtag(self, tag):
+
+            # if no text data was enclosed by the tag, handle_data function
+            # is not called, we have to handle it with a hook
+            if self.in_td and self._wData == None:
+                self._tds.append('')
+                #print "ERROR: %s" % (self.get_starttag_text())
+            self._wData = None
+
             self.in_td = False
-            if tag == 'tr' or tag == 'h3':
-                self.datas.append(self._tds)
+            self.in_th = False
+            self.in_h3 = False
+
+            if tag == 'table':
+                self.in_bm_declaration = False
+                self.in_bm_status      = False
+
+            if tag == 'tr':
+                if self.in_bm_declaration and self._tds != []:
+                    wName = self._tds[0]
+                    worker = {}
+
+                    # first workers table
+                    worker['Type']                  = self._tds[1]
+                    worker['Hostname']              = self._tds[2]
+                    worker['Address:Port']          = self._tds[3]
+                    worker['ConnectionPoolTimeout'] = self._tds[4]
+                    worker['ConnectTimeout']        = self._tds[5]
+                    worker['PrepostTimeout']        = self._tds[6]
+                    worker['ReplyTimeout']          = self._tds[7]
+                    worker['Retries']               = self._tds[8]
+                    worker['RecoveryOptions']       = self._tds[9]
+                    worker['MaxPacketSize']         = self._tds[10]
+                    worker['Balancer']              = self._balancer
+
+                    self.workers[wName] = worker
+
+                elif self.in_bm_status and self._tds != []:
+                    if len(self._tds) > 1:
+                        # there is a legend table which we do not want to
+                        # look in
+                        wName = self._tds[2]
+                        if self.workers.has_key(wName):
+                            # second workers table
+                            self.workers[wName]['ActConf']        = self._tds[3]
+                            self.workers[wName]['State']          = self._tds[4]
+                            self.workers[wName]['Distance']       = self._tds[5]
+                            self.workers[wName]['Factor']         = self._tds[6]
+                            self.workers[wName]['Multiplicity']   = self._tds[7]
+                            self.workers[wName]['Value']          = self._tds[8]
+                            self.workers[wName]['ReqNr']          = self._tds[9]
+                            self.workers[wName]['SessNr']         = self._tds[10]
+                            self.workers[wName]['ErrNr']          = self._tds[11]
+                            self.workers[wName]['ClinetErrNr']    = self._tds[12]
+                            self.workers[wName]['RyplyTO']        = self._tds[13]
+                            self.workers[wName]['BytesWr']        = self._tds[14]
+                            self.workers[wName]['BytesRead']      = self._tds[15]
+                            self.workers[wName]['BusyConnNr']     = self._tds[16]
+                            self.workers[wName]['BusyConnMaxNr']  = self._tds[17]
+                            self.workers[wName]['BackendConnNr']  = self._tds[18]
+                            self.workers[wName]['Route']          = self._tds[19]
+                            self.workers[wName]['RouteRedirect']  = self._tds[20]
+                            self.workers[wName]['ClusterDomain']  = self._tds[21]
+                            self.workers[wName]['RecoverySched']  = self._tds[22]
+                            self.workers[wName]['LastReset']      = self._tds[23]
+                            self.workers[wName]['LastErr']        = self._tds[24]
+                        else:
+                            print "ERROR: could not find worker name in the status table"
+
                 self._tds = []
 
+        def get_balancer_name(self, attrs):
+            '''Just a convinience function'''
+            for prop, val in attrs:
+                if prop == 'href':
+                    # extract balancer name from the query string
+                    parsed = urlparse.urlparse(val)
 
-    p = TableParser()
+                    if parsed.path and parsed.query:
+                        r = urlparse.parse_qs(parsed.query)
+                        if r.has_key('w'):
+                            return r['w'][0]
+            return False
+
+
+    p = LBParser()
     p.feed(f.read())
 
-    balancer = p.datas[20][0]
-    result = re.search("URI Mappings for ([a-zA-Z0-9]+)", balancer)
-    if result is not None:
-        balancer = result.group(1)
-    else:
-        print "Could not extract balancer name"
-        return 1
-
-    workers  = {}
-    for i in p.datas[10:14]: workers[i[0]] = i[1:]
-    for i in p.datas[15:19]: workers[i[2]] = workers[i[2]] + i[3:]
-
-    state = {}
-    for s in workers.keys():
-        #print s, workers[s]
-        a = "%s://%s:%s" % (workers[s][0], workers[s][1],workers[s][2].split(':')[1])
-        b = ('enabled', 'disabled')[workers[s][10]=='DIS']
-        state[s] = [a, b, balancer]
-
-    return state
+    return p.workers
 
 
 def balancer_status():
 
-    state = getWorkersList()
+    workers = getWorkersList()
 
-    template = "    {Worker:40} | {Status:10}"
-    print template.format(Worker="Worker",Status="Status")
-    for k in sorted(state.keys()):
-        print template.format(Worker=state[k][0],Status=state[k][1])
-        template.format(Worker=state[k][0],Status=state[k][1])
+    if workers:
+        template = "{Worker:40} | {Route:16} | {Status:10}| {From:16} | {To:16} | {Balancer:80}"
+        # print workers.keys()
+        print template.format( Worker="Worker", Route="Route", Status="Status", From='From', To = 'To', Balancer='Balancer' )
 
+        for k in sorted(workers.keys()):
+            # print workers[k]
+            print template.format(
+                Worker   = "%s://%s:%s" % (workers[k]['Type'], workers[k]['Hostname'], workers[k]['Address:Port'].split(':')[1]),
+                Route    = workers[k]['Route'],
+                Status   = workers[k]['ActConf'],
+                From     = workers[k]['BytesRead'],
+                To       = workers[k]['BytesWr'],
+                Balancer = workers[k]['Balancer']
+            )
+
+        return True
+
+    return False
 
 def balancer_manage(sAction, worker):
 
     if sAction not in ['enable', 'disable']:
         print "Unknown action: %s" %(sAction)
-        return 1
+        return False
 
-    state = getWorkersList()
+    workers = getWorkersList()
 
     found = False
-    for k in state.keys():
+    for k in workers.keys():
 
-        if state[k][0] == worker:
+        if worker == "%s://%s:%s" % (workers[k]['Type'], workers[k]['Hostname'], workers[k]['Address:Port'].split(':')[1]):
             found = True
 
-            r = urlparse(state[k][0])
-            print r
-            if r.scheme:
-                # the URL is parsable
+            action   = (0,1)[sAction == 'disable']
+            balancer = workers[k]['Balancer']
 
-                action   = (0,1)[sAction == 'disable']
-                balancer = state[k][2]
+            params = urlencode({'cmd': 'update', 'from': 'list','w': balancer, 'sw': k, 'vwa': action})
+            req    = Request(url+"?%s" % params, None)
+            urlopen(req)
 
-                params = urlencode({'cmd': 'update', 'from': 'list','w': balancer, 'sw': k, 'vwa': action})
-                req    = Request(url+"?%s" % params, None)
-                urlopen(req)
-
-                print "Action\n    Worker %s [%s]\n\nStatus" % (worker,sAction)
-                balancer_status()
-            else:
-                print "Could not parse woker URL: %s" %(worker)
-                return 1
+            print "Action\n    Worker %s [%s]\n\nStatus" % (worker,sAction)
+            balancer_status()
 
     if not found:
         print "Could not find worker: %s" %(worker)
-        return 1
+        return False
 
 
 #############################################################################
 
+r = 0
+
 if __name__ == "__main__":
     #if ARGS.list is not None:
     if ARGS.list :
-        balancer_status()
+        r = balancer_status()
     elif ARGS.action and ARGS.worker:
         r = balancer_manage(ARGS.action,ARGS.worker)
-        sys.exit(r)
-    else : PARSER.print_help()
+    else:
+        PARSER.print_help()
+
+    sys.exit( not r )
