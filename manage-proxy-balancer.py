@@ -30,11 +30,11 @@ import argparse
 import re
 import HTMLParser
 import sys
+import urlparse
 
 from urllib  import urlencode
 from urllib2 import Request
 from urllib2 import urlopen
-from urlparse import urlparse
 
 #############################################################################
 # Get args
@@ -72,44 +72,91 @@ def balancer_status():
     f = urlopen(req)
     #print f.read()
 
-    class TableParser(HTMLParser.HTMLParser):
+    class LBParser(HTMLParser.HTMLParser):
         def __init__(self):
-            self.datas=[]
+            self.workers=[]
             self._tds=[]
+            self._wData = None
+            self._balancer=""
             HTMLParser.HTMLParser.__init__(self)
-            self.in_td = False
+            self.in_td   = False
 
         def handle_starttag(self, tag, attrs):
             if tag == 'td' or tag == 'th':
                 self.in_td = True
+            elif self.in_td and tag == 'a':
+                self._balancer = self.get_balancer_name(attrs)
 
         def handle_data(self, data):
             if self.in_td:
-                self._tds.append(data)
+                self._tds.append(data.lstrip().rstrip())
+                self._wData = data
 
         def handle_endtag(self, tag):
+
+            # if now text data was enclosed by the tag, handle_data function
+            # is not called, we have to handle it with a hook
+            if self.in_td and self._wData == None:
+                self._tds.append('')
+                #print "ERROR: %s" % (self.get_starttag_text())
+            self._wData = None
+
+            # the tag is closed
             self.in_td = False
+
+            # try to find the worker status
+            found      = False
             if tag == 'tr':
-                self.datas.append(self._tds)
+                for index, v in enumerate(self._tds):
+                    r = urlparse.urlparse(v)
+                    if r.scheme:
+                        found = True
+                        break
+
+                # the worker status found, init the structure
+                if found:
+                    worker               = {}
+                    worker['Balancer']   = self._balancer
+                    worker['URL']        = self._tds[index + 0]
+                    worker['Route']      = self._tds[index + 1]
+                    worker['RouteRedir'] = self._tds[index + 2]
+                    worker['Factor']     = self._tds[index + 3]
+                    worker['Set']        = self._tds[index + 4]
+                    worker['Status']     = ('enabled','disabled')[ self._tds[index + 5].find('Dis') != -1 ]
+                    worker['Elected']    = self._tds[index + 6]
+                    worker['To']         = self._tds[index + 7]
+                    worker['From']       = self._tds[index + 8]
+                    self.workers.append(worker)
+
                 self._tds = []
 
-    p = TableParser()
+        def get_balancer_name(self, attrs):
+            '''Just a convinience function '''
+            for prop, val in attrs:
+                if prop == 'href':
+                    # b     - balancer name
+                    # w     - worker name
+                    # nonce - nonce
+                    parsed = urlparse.urlparse(val)
+                    if parsed.path and parsed.query:
+                      return urlparse.parse_qs(parsed.query)['b'][0]
+            return 'ERROR'
+
+    p = LBParser()
     p.feed(f.read())
 
-    state = []
-    for v in p.datas:
-        r = urlparse(v[0])
-        if r.scheme:
-            # the URL is parsable
-            state.append( [ v[0], ('enabled','disabled')[ v[4].find('Dis') !=  -1 ] ])
+    template = "{Worker:40} | {Route:16} | {Status:10}| {From:8} | {To:8} | {Balancer:80}"
+    print template.format(Worker="Worker",Route="Route", Status="Status",From='From', To = 'To', Balancer='Balancer')
 
-
-    template = "    {Worker:40} | {Status:10}"
-    print template.format(Worker="Worker",Status="Status")
-    for v in state:
-        print template.format(Worker=v[0],Status=v[1])
-        template.format(Worker=v[0],Status=v[1])
-
+    for v in p.workers:
+        print template.format(
+            Worker   = v['URL'],
+            Route    = v['Route'],
+            Status   = v['Status'],
+            From     = v['From'],
+            To       = v['To'],
+            Balancer = v['Balancer']
+        )
 
 def balancer_manage(sAction, worker):
 
@@ -119,18 +166,20 @@ def balancer_manage(sAction, worker):
 
     #Read informations
     req = Request(url, None)
-    f = urlopen(req)
+    f   = urlopen(req)
 
     #Find balancer and nonce
     result = re.search("b=([^&]+)&w="+worker+"&nonce=([^\"]+)", f.read())
     if result is not None:
         balancer = result.group(1)
-        nonce = result.group(2)
+        nonce    = result.group(2)
+
     #Generate URL
     action = (0,1)[sAction == 'disable']
     params = urlencode({'b': balancer, 'w': worker, 'status_D': action, 'nonce': nonce})
-    req = Request(url+"?%s" % params, None)
-    f = urlopen(req)
+    req    = Request(url+"?%s" % params, None)
+    f      = urlopen(req)
+
     print "Action\n    Worker %s [%s]\n\nStatus" % (worker,sAction)
     balancer_status()
 
