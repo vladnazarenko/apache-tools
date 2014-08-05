@@ -175,8 +175,8 @@ def balancer_manage(sAction, worker):
         nonce    = result.group(2)
 
     #Generate URL
-    action = (0,1)[sAction == 'disable']
-    params = urlencode({'b': balancer, 'w': worker, 'status_D': action, 'nonce': nonce})
+    action = sAction
+    params = urlencode({'b': balancer, 'w': worker, 'dw': action, 'nonce': nonce})
     req    = Request(url+"?%s" % params, None)
     f      = urlopen(req)
 
